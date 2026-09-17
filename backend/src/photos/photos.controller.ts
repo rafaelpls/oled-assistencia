@@ -21,13 +21,13 @@ import { z } from 'zod';
 import { Database } from '../common/database';
 import { parse, id } from '../common/validation';
 import { orderEvent } from '../common/events';
-import { PHOTO_STORAGE, PhotoStorage } from './storage.service';
+import { PhotoStorage } from './storage.service';
 @ApiTags('Fotos')
 @Controller()
 export class PhotosController {
   constructor(
     private db: Database,
-    @Inject(PHOTO_STORAGE) private storage: PhotoStorage,
+    @Inject(process.env.PHOTO_STORAGE) private storage: PhotoStorage,
   ) {}
   @ApiConsumes('multipart/form-data')
   @Post('service-orders/:id/photos')
