@@ -1,0 +1,268 @@
+generator client {
+ provider = "prisma-client-js"
+}
+datasource db {
+ provider = "postgresql"
+ url = env("DATABASE_URL")
+ directUrl = env("DIRECT_URL")
+}
+enum Role {
+ ADMIN
+ TECHNICIAN
+ ATTENDANT
+}
+enum OrderStatus {
+ OPEN
+ AWAITING_DIAGNOSIS
+ ANALYSIS
+ AWAITING_APPROVAL
+ AWAITING_PART
+ REPAIR
+ FINALIZED
+ AWAITING_PICKUP
+ DELIVERED
+ CANCELLED
+ WARRANTY
+}
+enum PhotoType {
+ ENTRY
+ REPAIR
+ FINALIZATION
+}
+model User {
+ id String @id @default(uuid())
+ name String
+ email String @unique
+ passwordHash String
+ role Role @default(ATTENDANT)
+ active Boolean @default(true)
+ mustChangePassword Boolean @default(true)
+ tokenVersion Int @default(0)
+ createdAt DateTime @default(now())
+ sessions Session[]
+ orders ServiceOrder[] @relation("Technician")
+}
+model Session {
+ id String @id @default(uuid())
+ tokenHash String @unique
+ userId String
+ user User @relation(fields:[userId],references:[id])
+ expiresAt DateTime
+ createdAt DateTime @default(now())
+}
+model Customer {
+ id String @id @default(uuid())
+ name String
+ phone String @unique
+ cpf String?
+ email String?
+ address String?
+ notes String?
+ createdAt DateTime @default(now())
+ devices Device[]
+ orders ServiceOrder[]
+ @@index([name])
+ @@index([cpf])
+}
+model Device {
+ id String @id @default(uuid())
+ customerId String
+ customer Customer @relation(fields:[customerId],references:[id])
+ brand String
+ model String
+ imei String?
+ color String?
+ pinEncrypted String?
+ notes String?
+ orders ServiceOrder[]
+ @@index([imei])
+ @@index([model])
+}
+model ServiceOrder {
+ id String @id @default(uuid())
+ number Int @unique @default(autoincrement())
+ customerId String
+ customer Customer @relation(fields:[customerId],references:[id])
+ deviceId String
+ device Device @relation(fields:[deviceId],references:[id])
+ technicianId String?
+ technician User? @relation("Technician",fields:[technicianId],references:[id])
+ status OrderStatus @default(OPEN)
+ problem String
+ physicalState String @default("")
+ accessories String[] @default([])
+ checklist Json @default("{}")
+ notes String @default("")
+ diagnosis String @default("")
+ estimatedCents Int @default(0)
+ finalCents Int @default(0)
+ warrantyDays Int @default(90)
+ termsSnapshot String @default("")
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ completedAt DateTime?
+ deliveredAt DateTime?
+ originalOrderId String?
+ originalOrder ServiceOrder? @relation("WarrantyOrders",fields:[originalOrderId],references:[id])
+ warrantyOrders ServiceOrder[] @relation("WarrantyOrders")
+ warranty Warranty?
+ history ServiceOrderStatusHistory[]
+ photos ServiceOrderPhoto[]
+ items ServiceOrderItem[]
+ budget Budget?
+ payments Payment[]
+ movements StockMovement[]
+ @@index([status,createdAt])
+ @@index([customerId])
+ @@index([deviceId])
+ @@index([technicianId])
+}
+model ServiceOrderStatusHistory {
+ id String @id @default(uuid())
+ orderId String
+ order ServiceOrder @relation(fields:[orderId],references:[id])
+ userId String
+ userName String
+ previousStatus OrderStatus?
+ newStatus OrderStatus
+ note String
+ createdAt DateTime @default(now())
+}
+model ServiceOrderPhoto {
+ id String @id @default(uuid())
+ orderId String
+ order ServiceOrder @relation(fields:[orderId],references:[id])
+ type PhotoType
+ storageKey String @unique
+ thumbnailKey String
+ userId String
+ userName String
+ createdAt DateTime @default(now())
+ @@index([orderId,type])
+}
+model ServiceOrderItem {
+ id String @id @default(uuid())
+ orderId String
+ order ServiceOrder @relation(fields:[orderId],references:[id])
+ productId String?
+ product Product? @relation(fields:[productId],references:[id])
+ type String
+ description String
+ quantity Int @default(1)
+ unitCents Int
+ stockDeducted Boolean @default(false)
+}
+model Supplier {
+ id String @id @default(uuid())
+ name String
+ company String @default("")
+ phone String @default("")
+ whatsapp String @default("")
+ email String @default("")
+ notes String @default("")
+ products Product[]
+}
+model Product {
+ id String @id @default(uuid())
+ name String
+ sku String @unique
+ category String
+ brand String @default("")
+ model String @default("")
+ screenType String @default("")
+ quality String @default("")
+ supplierId String?
+ supplier Supplier? @relation(fields:[supplierId],references:[id])
+ costCents Int @default(0)
+ saleCents Int @default(0)
+ installationCents Int @default(0)
+ stock Int @default(0)
+ minStock Int @default(0)
+ location String @default("")
+ notes String @default("")
+ active Boolean @default(true)
+ items ServiceOrderItem[]
+ movements StockMovement[]
+ @@index([model])
+ @@index([category,brand])
+}
+model StockMovement {
+ id String @id @default(uuid())
+ productId String
+ product Product @relation(fields:[productId],references:[id])
+ orderId String?
+ order ServiceOrder? @relation(fields:[orderId],references:[id])
+ kind String
+ quantity Int
+ balance Int
+ note String
+ userId String
+ createdAt DateTime @default(now())
+ @@index([productId,createdAt])
+}
+model Budget {
+ id String @id @default(uuid())
+ orderId String @unique
+ order ServiceOrder @relation(fields:[orderId],references:[id])
+ discountCents Int @default(0)
+ totalCents Int @default(0)
+ status String @default("PENDING")
+ userId String
+ updatedAt DateTime @updatedAt
+}
+model Payment {
+ id String @id @default(uuid())
+ orderId String
+ order ServiceOrder @relation(fields:[orderId],references:[id])
+ amountCents Int
+ method String
+ userId String
+ idempotencyKey String @unique
+ createdAt DateTime @default(now())
+ @@index([orderId])
+}
+model Warranty {
+ id String @id @default(uuid())
+ orderId String @unique
+ order ServiceOrder @relation(fields:[orderId],references:[id])
+ startsAt DateTime
+ endsAt DateTime
+}
+model Notification {
+ id String @id @default(uuid())
+ message String
+ orderId String?
+ createdAt DateTime @default(now())
+}
+model AuditLog {
+ id String @id @default(uuid())
+ userId String
+ userName String
+ action String
+ entity String
+ entityId String
+ createdAt DateTime @default(now())
+ @@index([createdAt])
+}
+model SystemSettings {
+ id String @id @default("main")
+ name String @default("OLED Assistência Técnica")
+ logo String @default("")
+ cnpj String @default("")
+ phone String @default("")
+ whatsapp String @default("")
+ address String @default("")
+ hours String @default("")
+ terms String @default("")
+ warrantyDays Int @default(90)
+ orderPrefix String @default("OS")
+ printCopies Int @default(1)
+}
+model OutboxEvent {
+ id String @id @default(uuid())
+ event String
+ orderId String
+ payload Json
+ createdAt DateTime @default(now())
+ processedAt DateTime?
+}

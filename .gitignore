@@ -1,0 +1,7 @@
+node_modules/
+.env
+.next/
+dist/
+uploads/
+*.log
+frontend/next-env.d.ts

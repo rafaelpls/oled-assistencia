@@ -1,0 +1,60 @@
+# Blueprint do Render para a API OLED (especificação: https://render.com/docs/blueprint-spec).
+# Cria um único web service Node que compila o backend, aplica as migrations a cada start e
+# responde ao health check em /health.
+services:
+  - type: web
+    name: oled-api
+    runtime: node
+    # Região mais próxima da América do Sul disponível no Render.
+    region: frankfurt
+    # O plano free "dorme" após inatividade: a primeira requisição após o cold start é lenta.
+    # Pode ser alterado para starter no dashboard sem mudar este arquivo.
+    plan: free
+    # --include=dev: NODE_ENV=production (abaixo) faz o npm omitir as devDependencies, e o build
+    # (prisma generate + tsc) e o migrate deploy do start precisam do Prisma CLI/TypeScript.
+    buildCommand: npm ci --include=dev && npm run build:api
+    # migrate deploy é idempotente e roda a cada start/deploy usando a DIRECT_URL do schema;
+    # assim não dependemos de preDeployCommand, indisponível no plano free.
+    startCommand: npx prisma migrate deploy && node dist/backend/src/main.js
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      # Versão do Node usada no build e no runtime.
+      - key: NODE_VERSION
+        value: "22"
+      # Variáveis fixas (não secretas).
+      - key: NODE_ENV
+        value: production
+      - key: TRUST_PROXY
+        value: "true"
+      - key: SWAGGER_ENABLED
+        value: "false"
+      - key: PHOTO_STORAGE
+        value: supabase
+      - key: SUPABASE_STORAGE_BUCKET
+        value: os-photos
+      - key: PORT
+        value: "4000"
+      # Secretas: preencha no dashboard ao aplicar o Blueprint (não ficam neste arquivo).
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: PIN_ENCRYPTION_KEY
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_NAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      # Preencher com a origem exata do frontend na Vercel (ex.: https://oled-xxx.vercel.app)
+      # após o primeiro deploy do frontend; cookies e CORS dependem disso.
+      - key: FRONTEND_ORIGIN
+        sync: false
