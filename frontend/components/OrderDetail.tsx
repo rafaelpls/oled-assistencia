@@ -127,25 +127,27 @@ export default function OrderDetail({
                 </button>
               </div>
             )}
-            <hr />
-            <span className="overline">FINANCEIRO</span>
-            <div className="summary-row">
-              <span>Valor total</span>
-              <strong>{money(o.finalCents)}</strong>
-            </div>
-            <div className="summary-row">
-              <span>Pago</span>
-              <strong>{money(paid)}</strong>
-            </div>
-            <div className="summary-row">
-              <span>Pendente</span>
-              <strong>{money(o.finalCents - paid)}</strong>
-            </div>
-            {(finance && mutable) || (finance && o.status === 'AWAITING_PICKUP') ? (
-              <button onClick={() => setDialog('payment')} disabled={paid >= o.finalCents}>
-                Registrar pagamento
-              </button>
-            ) : null}
+            {finance && <>
+              <hr />
+              <span className="overline">FINANCEIRO</span>
+              <div className="summary-row">
+                <span>Valor total</span>
+                <strong>{money(o.finalCents)}</strong>
+              </div>
+              <div className="summary-row">
+                <span>Pago</span>
+                <strong>{money(paid)}</strong>
+              </div>
+              <div className="summary-row">
+                <span>Pendente</span>
+                <strong>{money(o.finalCents - paid)}</strong>
+              </div>
+              {(mutable || o.status === 'AWAITING_PICKUP') && (
+                <button onClick={() => setDialog('payment')} disabled={paid >= o.finalCents}>
+                  Registrar pagamento
+                </button>
+              )}
+            </>}
             {o.warranty && (
               <>
                 <hr />
@@ -306,21 +308,23 @@ export default function OrderDetail({
                     Atualizar / aprovar orçamento
                   </button>
                 )}
-                <hr />
-                <h3>Pagamentos registrados</h3>
-                {o.payments.length ? (
-                  o.payments.map((p: any) => (
-                    <div className="summary-row" key={p.id}>
-                      <span>
-                        {methods[p.method]}
-                        <small>{date(p.createdAt)}</small>
-                      </span>
-                      <strong>{money(p.amountCents)}</strong>
-                    </div>
-                  ))
-                ) : (
-                  <p>Nenhum pagamento registrado.</p>
-                )}
+                {finance && <>
+                  <hr />
+                  <h3>Pagamentos registrados</h3>
+                  {o.payments.length ? (
+                    o.payments.map((p: any) => (
+                      <div className="summary-row" key={p.id}>
+                        <span>
+                          {methods[p.method]}
+                          <small>{date(p.createdAt)}</small>
+                        </span>
+                        <strong>{money(p.amountCents)}</strong>
+                      </div>
+                    ))
+                  ) : (
+                    <p>Nenhum pagamento registrado.</p>
+                  )}
+                </>}
               </>
             )}
             {tab === 'Fotos' && (
@@ -414,6 +418,7 @@ export default function OrderDetail({
           hidden
           ref={file}
           type="file"
+          aria-label="Selecionar fotos da ordem de serviço"
           accept="image/jpeg,image/png,image/webp"
           multiple
           onChange={(e) => upload(e.target.files, photoType)}

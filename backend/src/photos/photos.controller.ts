@@ -21,13 +21,13 @@ import { z } from 'zod';
 import { Database } from '../common/database';
 import { parse, id } from '../common/validation';
 import { orderEvent } from '../common/events';
-import { PhotoStorage } from './storage.service';
+import { PHOTO_STORAGE, PhotoStorage } from './storage.service';
 @ApiTags('Fotos')
 @Controller()
 export class PhotosController {
   constructor(
     private db: Database,
-    @Inject(process.env.PHOTO_STORAGE) private storage: PhotoStorage,
+    @Inject(PHOTO_STORAGE) private storage: PhotoStorage,
   ) {}
   @ApiConsumes('multipart/form-data')
   @Post('service-orders/:id/photos')
@@ -45,6 +45,13 @@ export class PhotosController {
     if (req.user.role === 'ATTENDANT' && type !== 'ENTRY')
       throw new BadRequestException('Atendentes podem registrar fotos de entrada.');
     if (!file) throw new BadRequestException('Selecione uma imagem.');
+    const order = await this.db.serviceOrder.findUnique({
+      where: { id: orderId },
+      select: { status: true },
+    });
+    if (!order) throw new NotFoundException('OS não encontrada.');
+    if (['DELIVERED', 'CANCELLED'].includes(order.status))
+      throw new BadRequestException('A OS está encerrada.');
     let full: Buffer, thumb: Buffer;
     try {
       const image = sharp(file.buffer, { limitInputPixels: 40000000 }).rotate();

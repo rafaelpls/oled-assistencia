@@ -54,7 +54,10 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
-      # Preencher com a origem exata do frontend na Vercel (ex.: https://oled-xxx.vercel.app)
+      # Mesmo valor cadastrado como secret no Cloudflare Worker; bloqueia acesso direto à API.
+      - key: EDGE_PROXY_SECRET
+        sync: false
+      # Preencher com a origem exata do frontend na Cloudflare (ex.: https://oled-assistencia.<conta>.workers.dev)
       # após o primeiro deploy do frontend; cookies e CORS dependem disso.
       - key: FRONTEND_ORIGIN
         sync: false

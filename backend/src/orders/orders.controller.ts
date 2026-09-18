@@ -46,8 +46,7 @@ export class OrdersController {
           }
         : {}),
     };
-    return {
-      items: await this.db.serviceOrder.findMany({
+    const items = await this.db.serviceOrder.findMany({
         where,
         ...page(q),
         orderBy: { createdAt: 'desc' },
@@ -59,9 +58,17 @@ export class OrdersController {
           device: { select: { id: true, brand: true, model: true } },
           technician: { select: { name: true } },
           budget: true,
-          payments: true,
+          payments:
+            r.user.role === 'TECHNICIAN'
+              ? false
+              : { select: { id: true, amountCents: true, method: true, createdAt: true } },
         },
-      }),
+      });
+    return {
+      items:
+        r.user.role === 'TECHNICIAN'
+          ? items.map((item) => ({ ...item, payments: [] }))
+          : items,
       total: await this.db.serviceOrder.count({ where }),
     };
   }

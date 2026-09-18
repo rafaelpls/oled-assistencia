@@ -39,9 +39,11 @@ export class SupabasePhotoStorage implements PhotoStorage {
       method,
       headers: {
         Authorization: `Bearer ${this.token}`,
+        apikey: this.token,
         ...(body ? { 'Content-Type': 'image/webp' } : {}),
       },
       body: body ? new Uint8Array(body) : undefined,
+      signal: AbortSignal.timeout(15_000),
     });
 
     if (!res.ok && !(method === 'DELETE' && res.status === 404)) {

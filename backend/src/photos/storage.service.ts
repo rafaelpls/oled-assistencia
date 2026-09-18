@@ -6,6 +6,7 @@ export interface PhotoStorage {
   get(key: string): Promise<Buffer>;
   remove(key: string): Promise<void>;
 }
+export const PHOTO_STORAGE = Symbol('PHOTO_STORAGE');
 @Injectable()
 export class LocalPhotoStorage implements PhotoStorage {
   private root = path.resolve(process.env.UPLOAD_DIR || 'uploads');

@@ -5,3 +5,8 @@ dist/
 uploads/
 *.log
 frontend/next-env.d.ts
+frontend/out/
+frontend/tsconfig.tsbuildinfo
+.wrangler/
+.dev.vars*
+!.dev.vars.example

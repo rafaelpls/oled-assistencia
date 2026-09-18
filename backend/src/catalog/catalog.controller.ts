@@ -51,6 +51,15 @@ const deviceSelect = {
   notes: true,
   customer: { select: { name: true } },
 };
+const technicianDeviceSelect = {
+  id: true,
+  customerId: true,
+  brand: true,
+  model: true,
+  color: true,
+  notes: true,
+  customer: { select: { name: true } },
+};
 const supplierSchema = z.object({
   name: text,
   company: text.optional().or(z.literal('')),
@@ -151,7 +160,7 @@ export class CatalogController {
       return c;
     });
   }
-  @Get('devices') async devices(@Query() q: any) {
+  @Get('devices') async devices(@Query() q: any, @Req() r: any) {
     const s = String(q.search || '').slice(0, 100);
     const where = {
       ...(q.customerId ? { customerId: parse(id, q.customerId) } : {}),
@@ -159,14 +168,18 @@ export class CatalogController {
         ? {
             OR: [
               { model: { contains: s, mode: 'insensitive' as const } },
-              { imei: { contains: s } },
               { customer: { name: { contains: s, mode: 'insensitive' as const } } },
+              ...(r.user.role === 'TECHNICIAN' ? [] : [{ imei: { contains: s } }]),
             ],
           }
         : {}),
     };
     return {
-      items: await this.db.device.findMany({ where, ...page(q), select: deviceSelect }),
+      items: await this.db.device.findMany({
+        where,
+        ...page(q),
+        select: r.user.role === 'TECHNICIAN' ? technicianDeviceSelect : deviceSelect,
+      }),
       total: await this.db.device.count({ where }),
     };
   }
@@ -181,11 +194,11 @@ export class CatalogController {
       return d;
     });
   }
-  @Get('devices/:id') async device(@Param('id') key: string) {
+  @Get('devices/:id') async device(@Param('id') key: string, @Req() r: any) {
     const d = await this.db.device.findUnique({
       where: { id: parse(id, key) },
       select: {
-        ...deviceSelect,
+        ...(r.user.role === 'TECHNICIAN' ? technicianDeviceSelect : deviceSelect),
         orders: { include: { warranty: true }, orderBy: { createdAt: 'desc' } },
       },
     });

@@ -5,6 +5,9 @@
     "dev:api": "tsc -p backend/tsconfig.json && node dist/backend/src/main.js",
     "dev:web": "next dev frontend --hostname 127.0.0.1",
     "build": "npm run build:api && next build frontend --webpack",
+    "build:cloudflare": "cross-env CLOUDFLARE_STATIC_EXPORT=true next build frontend --webpack",
+    "preview:cloudflare": "npm run build:cloudflare && wrangler dev",
+    "deploy:cloudflare": "npm run build:cloudflare && wrangler deploy",
     "test": "npm run build:api && node --test backend/tests/*.test.cjs",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
@@ -59,12 +62,14 @@
     "@types/node": "^22.18.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "cross-env": "^10.0.0",
     "@typescript-eslint/parser": "^8.70.0",
     "eslint": "^9.39.5",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react-hooks": "^7.1.1",
     "prisma": "6.19.0",
     "tsx": "^4.20.0",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "wrangler": "^4.0.0"
   }
 }

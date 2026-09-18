@@ -27,6 +27,13 @@ const technicianDetailDeviceSelect = {
   notes: true,
   customerId: true,
 };
+const paymentPublicSelect = {
+  id: true,
+  orderId: true,
+  amountCents: true,
+  method: true,
+  createdAt: true,
+};
 export const detailInclude = {
   customer: true,
   device: { select: detailDeviceSelect },
@@ -35,7 +42,7 @@ export const detailInclude = {
   history: { orderBy: { createdAt: 'asc' as const } },
   items: true,
   budget: true,
-  payments: true,
+  payments: { select: paymentPublicSelect },
   warranty: true,
   warrantyOrders: { select: { id: true, number: true, status: true } },
 };
@@ -43,6 +50,7 @@ export const technicianDetailInclude = {
   ...detailInclude,
   customer: { select: technicianCustomerSelect },
   device: { select: technicianDetailDeviceSelect },
+  payments: false,
 };
 export const orderDetailInclude = (user: Actor) =>
   user.role === 'TECHNICIAN' ? technicianDetailInclude : detailInclude;
@@ -83,7 +91,7 @@ export class OrdersService {
   async detail(id: string, user: Actor) {
     const o = await this.db.serviceOrder.findUnique({ where: { id }, include: orderDetailInclude(user) });
     if (!o) throw new NotFoundException('OS não encontrada.');
-    return o;
+    return user.role === 'TECHNICIAN' ? { ...o, payments: [] } : o;
   }
   async lock(tx: Prisma.TransactionClient, id: string) {
     const o = await tx.serviceOrder.findUnique({
@@ -278,7 +286,13 @@ export class OrdersService {
           previous.method !== method
         )
           throw new BadRequestException('Identificador de pagamento já utilizado.');
-        return previous;
+        return {
+          id: previous.id,
+          orderId: previous.orderId,
+          amountCents: previous.amountCents,
+          method: previous.method,
+          createdAt: previous.createdAt,
+        };
       }
       const o = await this.lock(tx, id);
       if (['CANCELLED', 'DELIVERED'].includes(o.status) || o.budget?.status !== 'APPROVED')
@@ -288,6 +302,7 @@ export class OrdersService {
         throw new BadRequestException('Pagamento maior que o saldo pendente.');
       const p = await tx.payment.create({
         data: { orderId: id, amountCents, method, idempotencyKey: key, userId: user.id },
+        select: paymentPublicSelect,
       });
       await orderEvent(tx, user, o, o.status, 'Pagamento registrado');
       return p;

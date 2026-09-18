@@ -1,0 +1,101 @@
+{
+  "date": "2026-09-18T00:12:07.176Z",
+  "mode": "controlled API fixtures",
+  "browser": "Microsoft Edge headless",
+  "results": [
+    {
+      "name": "Dashboard com dados reais do contrato",
+      "passed": true
+    },
+    {
+      "name": "Sidebar recolhe e persiste após recarregar",
+      "passed": true
+    },
+    {
+      "name": "Filtro do dashboard abre a etapa correta",
+      "passed": true
+    },
+    {
+      "name": "Paginação, busca, detalhe e retorno preservam filtros",
+      "passed": true
+    },
+    {
+      "name": "Busca vazia com ação de limpar",
+      "passed": true
+    },
+    {
+      "name": "Ctrl K e busca global abrem a OS diretamente",
+      "passed": true
+    },
+    {
+      "name": "Abas por teclado e peças somente ao abrir formulário",
+      "passed": true
+    },
+    {
+      "name": "Nova OS valida campos e protege alterações",
+      "passed": true
+    },
+    {
+      "name": "Criação com checklist completo e rascunho preservado",
+      "passed": true
+    },
+    {
+      "name": "Menu de ações e confirmação para desativar usuário",
+      "passed": true
+    },
+    {
+      "name": "Responsividade de 15 telas em 1920px",
+      "passed": true
+    },
+    {
+      "name": "Responsividade de 15 telas em 1440px",
+      "passed": true
+    },
+    {
+      "name": "Responsividade de 15 telas em 1366px",
+      "passed": true
+    },
+    {
+      "name": "Responsividade de 15 telas em 1024px",
+      "passed": true
+    },
+    {
+      "name": "Responsividade de 15 telas em 768px",
+      "passed": true
+    },
+    {
+      "name": "Responsividade de 15 telas em 430px",
+      "passed": true
+    },
+    {
+      "name": "Responsividade de 15 telas em 390px",
+      "passed": true
+    },
+    {
+      "name": "Menu mobile contém o foco e fecha com ESC",
+      "passed": true
+    },
+    {
+      "name": "Acessibilidade automatizada das telas e formulário",
+      "passed": true
+    },
+    {
+      "name": "Erro de API permite tentar novamente",
+      "passed": false,
+      "error": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: 'Tentar novamente' })\u001b[22m\n"
+    },
+    {
+      "name": "Visibilidade das ações para TECHNICIAN",
+      "passed": true
+    },
+    {
+      "name": "Visibilidade das ações para ATTENDANT",
+      "passed": true
+    },
+    {
+      "name": "Nenhum erro JavaScript durante os fluxos",
+      "passed": true
+    }
+  ],
+  "errors": []
+}

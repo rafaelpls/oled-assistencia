@@ -2,7 +2,7 @@
 
 Aplicação em português para atendimento de celulares e eletrônicos. Frontend Next.js + React + TypeScript, API NestJS, PostgreSQL e Prisma. Dados operacionais são persistidos no servidor; não há banco simulado nem cadastros demonstrativos.
 
-O modo local usa PostgreSQL e arquivos em disco via Docker. Em produção, o plano suportado é frontend na Vercel, backend Node em serviço gerenciado e banco + fotos no Supabase (PostgreSQL e Storage privado), detalhados em **Produção e deploy**.
+O modo local usa PostgreSQL e arquivos em disco via Docker. Em produção, a arquitetura preparada é frontend estático + proxy na Cloudflare Workers, API Node no Render e banco + fotos no Supabase (PostgreSQL e Storage privado), detalhados em **Produção e deploy**.
 
 ## Stack
 
@@ -65,14 +65,15 @@ O comando `dev:api` compila e inicia a API; reinicie-o após alterações no bac
 
 | Variável | Uso |
 |---|---|
-| `DATABASE_URL` | Conexão PostgreSQL usada pelo Prisma em execução; local, o Postgres do Compose; Supabase, o pooler de transações (porta 6543) |
-| `DIRECT_URL` | Conexão direta usada pelo Prisma para migrations (`directUrl` no schema); local, igual à `DATABASE_URL`; Supabase, porta 5432 |
+| `DATABASE_URL` | Conexão PostgreSQL usada pelo Prisma em execução; local, o Postgres do Compose; no Render, Supabase Session Pooler (porta 5432) |
+| `DIRECT_URL` | Conexão usada pelo Prisma para migrations (`directUrl` no schema); local, igual à `DATABASE_URL`; Supabase, conexão direta ou Session Pooler 5432 |
 | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | Credenciais do Postgres local do Compose |
 | `JWT_SECRET` | Assinatura dos tokens de acesso; mínimo de 32 caracteres. Somente servidor |
 | `PIN_ENCRYPTION_KEY` | Chave AES-256-GCM, 64 caracteres hexadecimais. Somente servidor |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_NAME` | Administrador inicial criado pelo seed. Somente servidor |
 | `FRONTEND_ORIGIN` | Origem exata autorizada para CORS e solicitações de escrita. Somente servidor |
 | `API_INTERNAL_URL` | Destino do proxy Next.js; definido também durante o build |
+| `EDGE_PROXY_SECRET` | Segredo compartilhado Cloudflare → Render; quando definido, bloqueia acesso direto à API (exceto `/health`) |
 | `PHOTO_STORAGE` | `local` (padrão, usa `UPLOAD_DIR`) ou `supabase` (Supabase Storage). Somente servidor |
 | `SUPABASE_URL` | URL do projeto Supabase, sem barra final; usada se `PHOTO_STORAGE=supabase`. Somente servidor |
 | `SUPABASE_SERVICE_ROLE_KEY` | Chave service role do Supabase. Segredo de servidor: **nunca** vai ao frontend |
@@ -90,8 +91,8 @@ Tudo o que envolve banco, segredos e storage é exclusivo do servidor; o fronten
 Para usar o PostgreSQL gerenciado do Supabase no lugar do Postgres local:
 
 1. Crie um projeto em [supabase.com](https://supabase.com), escolhendo uma região próxima aos usuários e uma senha forte de banco.
-2. No painel, em **Connect**, copie a connection string do **Transaction pooler** (porta 6543, com `?pgbouncer=true`) e use-a como `DATABASE_URL`.
-3. Copie também a connection string direta (porta 5432, host `db.<ref>.supabase.co`) e use-a como `DIRECT_URL`. Ela é necessária para as migrations.
+2. No painel, em **Connect**, copie a connection string do **Session pooler** (porta 5432) e use-a como `DATABASE_URL` no backend persistente do Render.
+3. Use a conexão direta como `DIRECT_URL` se o provedor tiver IPv6; caso contrário, use também o Session pooler 5432. O Transaction pooler 6543 fica reservado a runtimes serverless/autoscaling.
 4. Aplique o schema e o seed:
 
    ```bash
@@ -102,7 +103,7 @@ Para usar o PostgreSQL gerenciado do Supabase no lugar do Postgres local:
    O `migrate deploy` usa `DIRECT_URL`. O seed cria o administrador inicial e as configurações; é idempotente e não sobrescreve a senha de um usuário existente.
 5. Não use `prisma db push` nem `prisma migrate reset` no banco de produção: migrations são a única via de alteração de schema.
 
-Sobre connection pooling: a aplicação usa o pooler (porta 6543) em `DATABASE_URL`; as migrations usam a conexão direta (porta 5432) em `DIRECT_URL`, declarada em `directUrl` no `schema.prisma`. Credenciais não existem no código — apenas no `.env` ou no ambiente do serviço hospedado.
+Como esta arquitetura mantém o NestJS em um serviço Node persistente, ela usa o Session pooler 5432. Credenciais não existem no código — apenas no `.env` ou no ambiente do serviço hospedado. Se o aplicativo não usar REST/GraphQL do Supabase, desative a **Data API** no painel; o Storage continua acessado somente pelo backend.
 
 ## Storage de fotos
 
@@ -227,57 +228,26 @@ Na OS, **Imprimir** abre a impressão do navegador, que também permite salvar e
 
 ## Produção e deploy
 
-Arquitetura alvo:
+Arquitetura suportada:
 
 ```text
-Frontend (Vercel) → Backend Node (Render) → Supabase (PostgreSQL + Storage)
+Navegador → Cloudflare Worker (frontend + /api) → Render (NestJS) → Supabase
 ```
 
-O backend usa o Blueprint `render.yaml` da raiz: serviço único `oled-api`, runtime Node 22, região Frankfurt (a mais próxima da América do Sul disponível no Render), build `npm ci --include=dev && npm run build:api` e start `npx prisma migrate deploy && node dist/backend/src/main.js` — as migrations rodam a cada start/deploy (idempotentes) e o health check fica em `/health`. Siga os passos em ordem:
+O frontend é exportado estaticamente por `npm run build:cloudflare`. O Worker serve `frontend/out` e encaminha somente `/api/*` ao Render; assim os cookies HttpOnly continuam na mesma origem do navegador. O backend permanece Node completo, adequado ao Prisma e ao processamento de imagens com `sharp`. O `render.yaml` cria a API, aplica migrations e verifica banco + aplicação em `/health`.
 
-### 1. Supabase — banco e fotos
+Procedimento resumido:
 
-1. Crie o projeto em [supabase.com](https://supabase.com) escolhendo a região **São Paulo**. Em **Connect**, copie a string do **Transaction pooler** (porta 6543, com `?pgbouncer=true`) para `DATABASE_URL` e a conexão direta (porta 5432) para `DIRECT_URL`.
-2. No Storage, crie o bucket **privado** `os-photos`.
-3. Uma vez, da sua máquina, aponte o `.env` para o Supabase e rode `npx prisma migrate deploy` e `npm run db:seed` (idempotente: cria o administrador e as configurações). O Render aplica as migrations no primeiro deploy, mas o seed do admin precisa desta execução local. Detalhes em **Banco Supabase** e **Storage de fotos**.
+1. No Supabase, crie o PostgreSQL e o bucket **privado** `os-photos`; desative a Data API se ela não será usada.
+2. No Render, importe o repositório como **Blueprint**, preencha as variáveis marcadas `sync: false` e confirme `https://SEU-BACKEND/health`.
+3. Na raiz do projeto, execute `npx wrangler login` e `npm run deploy:cloudflare`.
+4. Nas variáveis do Worker, cadastre `API_ORIGIN=https://SEU-BACKEND.onrender.com` sem `/api` e sem barra final; cadastre também `EDGE_PROXY_SECRET` com o mesmo valor definido no Render.
+5. No Render, defina `FRONTEND_ORIGIN` com a origem exata `https://...workers.dev` ou com seu domínio final e redeploye.
+6. Teste `/api/health`, login, criação de OS e upload de foto. Depois associe o domínio em **Workers & Pages → Custom Domains** e atualize `FRONTEND_ORIGIN` se a origem mudar.
 
-### 2. GitHub
+Para deploy automático pelo GitHub no Cloudflare Workers Builds, mantenha a raiz do repositório e use build `npm ci && npm run build:cloudflare` e deploy `npx wrangler deploy`. A única chave compartilhada com a Cloudflare é `EDGE_PROXY_SECRET`; nunca cadastre `SUPABASE_SERVICE_ROLE_KEY`, `JWT_SECRET`, `PIN_ENCRYPTION_KEY` ou URLs com senha no frontend/Cloudflare: esses valores pertencem somente ao backend Render.
 
-Suba o repositório para o GitHub: as integrações GitHub → Render e GitHub → Vercel exigem o código lá.
-
-### 3. Render — backend
-
-1. **New → Blueprint** e selecione o repositório; o Render lê o `render.yaml` e cria o serviço `oled-api`.
-2. Preencha as env vars secretas marcadas com `sync: false`: `DATABASE_URL`, `DIRECT_URL`, `JWT_SECRET`, `PIN_ENCRYPTION_KEY`, `ADMIN_EMAIL`, `ADMIN_NAME`, `ADMIN_PASSWORD`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` e `FRONTEND_ORIGIN` (esta última pode aguardar o passo 5).
-3. Após o primeiro deploy, anote a URL pública do serviço (ex.: `https://oled-api.onrender.com`) e confira `https://.../health` respondendo `{"status":"ok"}`.
-
-### 4. Vercel — frontend
-
-1. **Add New Project**, importe o repositório e defina **Root Directory = `frontend`**.
-2. Crie a variável `API_INTERNAL_URL` com a URL pública do Render do passo 3 (vale em build e runtime; alimenta o rewrite `/api/:path*` do `next.config.ts`, pelo qual o frontend faz proxy das chamadas à API). Como o proxy mantém tudo na origem do navegador, não é exigida mesma origem entre frontend e backend, e os cookies de autenticação funcionam sem ajustes adicionais.
-3. Faça o deploy e anote a URL (ex.: `https://oled-xxx.vercel.app`).
-
-### 5. Fechar o ciclo
-
-1. No Render, defina `FRONTEND_ORIGIN` com a origem exata do frontend na Vercel (ex.: `https://oled-xxx.vercel.app`) e redeploye o backend: CORS e o middleware de origem das escritas dependem disso.
-2. Faça o primeiro login com `ADMIN_EMAIL`/`ADMIN_PASSWORD`; a troca de senha é obrigatória.
-
-As variáveis fixas do serviço (`NODE_ENV=production`, `TRUST_PROXY=true`, `SWAGGER_ENABLED=false`, `PHOTO_STORAGE=supabase`, `SUPABASE_STORAGE_BUCKET`, `PORT`) já vêm no Blueprint. `NODE_ENV=production` ativa cookies Secure e exige HTTPS; `TRUST_PROXY=true` faz o rate limit enxergar o IP real atrás do proxy. Nenhuma URL `localhost` deve existir nos ambientes hospedados.
-
-### Free plan e segredos
-
-- O plano free do Render "dorme" após inatividade: a primeira requisição após o cold start pode demorar alguns segundos. Para eliminá-lo, altere para o plano starter no dashboard, sem mudanças no `render.yaml`.
-- `JWT_SECRET`, `PIN_ENCRYPTION_KEY` e `SUPABASE_SERVICE_ROLE_KEY` vivem somente no servidor (Render/Supabase): nunca no repositório nem no frontend.
-
-### CORS e cookies
-
-A mesma origem entre frontend e backend não é exigida: o frontend faz proxy de `/api` para o backend, então o navegador enxerga apenas a origem do frontend. Basta que `FRONTEND_ORIGIN` no backend seja idêntica à origem do frontend acessada pelo navegador.
-
-### Backups e chaves
-
-- Habilite os backups do banco no Supabase e teste a restauração periodicamente.
-- Preserve `PIN_ENCRYPTION_KEY`: os PINs cifrados ficam ilegíveis sem ela. Não a altere enquanto houver PINs retidos sem uma migração planejada.
-- Logs de auditoria são consultáveis pelo administrador; senhas, tokens e PINs não são incluídos nesses registros.
+O guia completo, incluindo Supabase, variáveis, domínio, validação e rollback, está em [docs/DEPLOY_CLOUDFLARE_SUPABASE.md](docs/DEPLOY_CLOUDFLARE_SUPABASE.md).
 
 ## Troubleshooting
 

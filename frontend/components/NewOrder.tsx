@@ -48,8 +48,11 @@ export default function NewOrder({
   const addFiles=(selected:File[])=>{if(selected.some(f=>!['image/jpeg','image/png','image/webp'].includes(f.type)||f.size>10*1024*1024)){a.setError('Selecione fotos JPEG, PNG ou WebP de até 10 MB.');return}a.setError('');setFiles(old=>[...old,...selected])};
   const selectCustomer = async (c: any) => {
     const found=(await api('/devices?customerId='+c.id)).items;
-    if(customer?.id!==c.id){setDevice(null);setDeviceDraft({})}
+    const sameCustomer = customer?.id === c.id;
+    if(!sameCustomer){setDevice(null);setDeviceDraft({})}
     setCustomer(c);setDevices(found);setNewDevice(!found.length&&user.role!=='TECHNICIAN');
+    if (sameCustomer && user.role !== 'TECHNICIAN' && Object.keys(deviceDraft).length)
+      setNewDevice(true);
     setStep(1);
   };
   const create = () =>

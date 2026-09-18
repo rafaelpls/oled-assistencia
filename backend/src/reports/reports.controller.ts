@@ -146,7 +146,14 @@ export class ReportsController {
       items: await this.db.payment.findMany({
         ...page(q),
         orderBy: { createdAt: 'desc' },
-        include: { order: { select: { number: true, customer: { select: { name: true } } } } },
+        select: {
+          id: true,
+          orderId: true,
+          amountCents: true,
+          method: true,
+          createdAt: true,
+          order: { select: { number: true, customer: { select: { name: true } } } },
+        },
       }),
     };
   }
